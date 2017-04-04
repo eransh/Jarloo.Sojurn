@@ -4,9 +4,8 @@ using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
-using Caliburn.Micro;
+using System.Windows.Threading;
 using Jarloo.Sojurn.Models;
 
 namespace Jarloo.Sojurn.Helpers
@@ -19,6 +18,8 @@ namespace Jarloo.Sojurn.Helpers
                 new BitmapImage(new Uri(@"pack://application:,,,/Jarloo.Sojurn;component/Images/image_show.png",
                     UriKind.Absolute));
 
+            show.ImageSource.Freeze();
+
             foreach (var season in show.Seasons)
             {
                 foreach (var episode in season.Episodes)
@@ -27,114 +28,112 @@ namespace Jarloo.Sojurn.Helpers
                         new BitmapImage(
                             new Uri(@"pack://application:,,,/Jarloo.Sojurn;component/Images/image_episode.png",
                                 UriKind.Absolute));
+
+                    episode.ImageSource.Freeze();
                 }
             }
         }
 
-        public static void GetShowImage(Show show)
+        public static void GetShowImageUrl(Show show)
         {
             if (string.IsNullOrWhiteSpace(show.ImageUrl)) return;
 
             show.IsLoading = true;
 
-            Task.Factory.StartNew(() =>
+            var extension = Path.GetExtension(show.ImageUrl);
+            var file = $"{show.ShowId}{extension}";
+            var folder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                ConfigurationManager.AppSettings["IMAGE_CACHE"]);
+
+            if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+
+            var filename = Path.Combine(folder, file);
+
+            if (!File.Exists(filename))
             {
-                var extension = Path.GetExtension(show.ImageUrl);
-                var file = string.Format("{0}{1}", show.ShowId, extension);
-                var folder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                    ConfigurationManager.AppSettings["IMAGE_CACHE"]);
-
-                if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
-
-                var filename = Path.Combine(folder, file);
-
-                if (!File.Exists(filename))
+                using (var web = new WebClient())
                 {
-                    using (var web = new WebClient())
-                    {
-                        web.DownloadFile(show.ImageUrl, filename);
-                    }
+                    web.DownloadFile(show.ImageUrl, filename);
                 }
+            }
 
-                Execute.BeginOnUIThread(() =>
-                {
-                    show.ImageSource = new BitmapImage(new Uri(filename));
-                    show.IsLoading = false;
-                });
-            });
+            show.ImageSource = new BitmapImage(new Uri(filename));
+            show.ImageSource.Freeze();
+            show.IsLoading = false;
         }
 
-        public static void GetEpisodeImages(Show show)
+        public static void GetEpisodeImages(Show show, Dispatcher dispatcher)
         {
             foreach (var episode in show.Seasons.SelectMany(season => season.Episodes))
             {
                 episode.IsLoading = true;
             }
 
-            Task.Factory.StartNew(() =>
+
+            foreach (var season in show.Seasons.OrderByDescending(w => w.SeasonNumber))
             {
-                foreach (var season in show.Seasons.OrderByDescending(w => w.SeasonNumber))
+                foreach (var episode in season.Episodes.OrderByDescending(w => w.EpisodeNumber))
                 {
-                    foreach (var episode in season.Episodes.OrderByDescending(w => w.EpisodeNumber))
+                    var e = episode;
+
+                    if (episode.ImageUrl != null)
                     {
-                        var e = episode;
+                        var extension = Path.GetExtension(e.ImageUrl);
+                        var file = $"{show.ShowId}_{season.SeasonNumber}_{e.EpisodeNumber}{extension}";
+                        var folder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                            ConfigurationManager.AppSettings["IMAGE_CACHE"]);
 
-                        if (episode.ImageUrl != null)
+                        if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+
+                        var filename = Path.Combine(folder, file);
+
+                        if (!File.Exists(filename))
                         {
-                            var extension = Path.GetExtension(e.ImageUrl);
-                            var file = string.Format("{0}_{1}_{2}{3}", show.ShowId, season.SeasonNumber,
-                                e.EpisodeNumber, extension);
-                            var folder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                                ConfigurationManager.AppSettings["IMAGE_CACHE"]);
-
-                            if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
-
-                            var filename = Path.Combine(folder, file);
-
-                            if (!File.Exists(filename))
+                            using (var web = new WebClient())
                             {
-                                using (var web = new WebClient())
-                                {
-                                    web.DownloadFile(e.ImageUrl, filename);
-                                }
+                                web.DownloadFile(e.ImageUrl, filename);
                             }
+                        }
 
-                            Execute.BeginOnUIThread(() =>
+                        dispatcher.InvokeAsync(() =>
+                        {
+                            try
                             {
-                                try
+                                if (extension?.ToUpper() == ".PNG")
                                 {
-                                    if (extension.ToUpper() == ".PNG")
+                                    using (var imageStreamSource = new FileStream(filename, FileMode.Open,
+                                        FileAccess.Read, FileShare.Read))
                                     {
-                                        Stream imageStreamSource = new FileStream(filename, FileMode.Open,
-                                            FileAccess.Read, FileShare.Read);
                                         var decoder = new PngBitmapDecoder(imageStreamSource,
                                             BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default);
                                         e.ImageSource = decoder.Frames[0];
-                                    }
-                                    else
-                                    {
-                                        try
-                                        {
-                                            e.ImageSource = new BitmapImage(new Uri(filename));
-                                        }
-                                        catch
-                                        {
-                                            //File most likely corrupted
-                                            File.Delete(filename);
-                                        }
+                                        e.ImageSource.Freeze();
                                     }
                                 }
-                                catch
+                                else
                                 {
-                                    //supress
+                                    try
+                                    {
+                                        e.ImageSource = new BitmapImage(new Uri(filename));
+                                        e.ImageSource.Freeze();
+                                    }
+                                    catch
+                                    {
+                                        //File most likely corrupted
+                                        File.Delete(filename);
+                                    }
                                 }
-                            });
-                        }
-
-                        Execute.BeginOnUIThread(() => e.IsLoading = false);
+                            }
+                            catch
+                            {
+                                //supress
+                            }
+                        }, DispatcherPriority.Background);
                     }
+
+                    dispatcher.InvokeAsync(() => { e.IsLoading = false; }, DispatcherPriority.Background);
                 }
-            });
+            }
         }
 
         public static void DeleteUnusedImages(List<Show> shows)
@@ -143,6 +142,8 @@ namespace Jarloo.Sojurn.Helpers
 
             var folder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                 ConfigurationManager.AppSettings["IMAGE_CACHE"]);
+
+            if (!Directory.Exists(folder)) return;
 
             var files = Directory.GetFiles(folder);
 

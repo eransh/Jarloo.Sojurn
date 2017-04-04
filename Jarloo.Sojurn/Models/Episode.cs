@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Runtime.Serialization;
 using System.Windows.Media;
-using Caliburn.Micro;
+using Jarloo.Sojurn.Helpers;
 
 namespace Jarloo.Sojurn.Models
 {
     [DataContract]
-    public class Episode : PropertyChangedBase
+    public class Episode : NotifyPropertyChangedBase
     {
         private DateTime? airDate;
         private int episodeNumber;
@@ -19,7 +19,18 @@ namespace Jarloo.Sojurn.Models
         private int seasonNumber;
         private string showName;
         private string title;
+        private string summary;
 
+        [DataMember]
+        public string Summary
+        {
+            get { return summary; }
+            set
+            {
+                summary = value;
+                NotifyOfPropertyChange(() => Summary);
+            }
+        }
 
         [DataMember]
         public int EpisodeNumberThisSeason

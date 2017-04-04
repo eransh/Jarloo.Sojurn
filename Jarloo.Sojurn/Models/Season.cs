@@ -1,18 +1,23 @@
 ﻿using System.Collections.Generic;
 using System.Runtime.Serialization;
-using Caliburn.Micro;
+using Jarloo.Sojurn.Helpers;
 
 namespace Jarloo.Sojurn.Models
 {
     [DataContract]
-    public class Season : PropertyChangedBase
+    public class Season : NotifyPropertyChangedBase
     {
-        [DataMember]
-        public List<Episode> Episodes { get; set; }
-
         private int seasonNumber;
 
         private Episode selectedEpisode;
+
+        public Season()
+        {
+            Episodes = new List<Episode>();
+        }
+
+        [DataMember]
+        public List<Episode> Episodes { get; set; }
 
         [IgnoreDataMember]
         public Episode SelectedEpisode
@@ -34,11 +39,6 @@ namespace Jarloo.Sojurn.Models
                 seasonNumber = value;
                 NotifyOfPropertyChange(() => SeasonNumber);
             }
-        }
-
-        public Season()
-        {
-            Episodes = new List<Episode>();
         }
     }
 }

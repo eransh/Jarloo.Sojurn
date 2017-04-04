@@ -2,31 +2,49 @@
 using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Windows.Media;
-using Caliburn.Micro;
+using Jarloo.Sojurn.Helpers;
 
 namespace Jarloo.Sojurn.Models
 {
     [DataContract]
-    public class Show : PropertyChangedBase
+    public class Show : NotifyPropertyChangedBase
     {
-        [DataMember]
-        public List<Season> Seasons { get; set; }
+        private int airTimeHour;
+        private int airTimeMinute;
 
         private string country;
         private DateTime? ended;
         private ImageSource imageSource;
+        private string imageUrl;
+        private bool isLoading;
+        private DateTime? lastUpdated;
         private string link;
         private string name;
+        private Season selectedSeason;
         private int showId;
         private DateTime? started;
         private string status;
-        private string imageUrl;
-        private bool isLoading;
-        private Season selectedSeason;
-        private int airTimeHour;
-        private int airTimeMinute;
         private int timezone;
-        private DateTime? lastUpdated;
+        private int unwatchedCount;
+
+        public Show()
+        {
+            Seasons = new List<Season>();
+        }
+
+        [DataMember]
+        public List<Season> Seasons { get; set; }
+
+        [IgnoreDataMember]
+        public int UnwatchedCount
+        {
+            get { return unwatchedCount; }
+            set
+            {
+                unwatchedCount = value;
+                NotifyOfPropertyChange(() => UnwatchedCount);
+            }
+        }
 
         [DataMember]
         public DateTime? LastUpdated
@@ -70,12 +88,6 @@ namespace Jarloo.Sojurn.Models
                 airTimeHour = value;
                 NotifyOfPropertyChange(() => AirTimeHour);
             }
-        }
-
-
-        public Show()
-        {
-            Seasons = new List<Season>();
         }
 
         [IgnoreDataMember]

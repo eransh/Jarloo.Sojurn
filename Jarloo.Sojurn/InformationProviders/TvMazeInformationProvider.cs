@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Text.RegularExpressions;
 using System.Web;
+using Jarloo.Sojurn.Extensions;
 using Jarloo.Sojurn.Helpers;
 using Jarloo.Sojurn.Models;
 using Newtonsoft.Json;
@@ -12,10 +14,10 @@ namespace Jarloo.Sojurn.InformationProviders
     internal class TvMazeInformationProvider : IInformationProvider
     {
         private const string BASE_URL = "http://api.tvmaze.com/";
-
+        
         public List<Show> GetShows(string search)
         {
-            var requestUri = string.Format("{0}search/shows?q={1}", BASE_URL, HttpUtility.HtmlEncode(search));
+            var requestUri = $"{BASE_URL}search/shows?q={HttpUtility.HtmlEncode(search)}";
             var data = GetJsonData(requestUri);
 
             var shows = new List<Show>();
@@ -24,8 +26,12 @@ namespace Jarloo.Sojurn.InformationProviders
                 var show = new Show
                 {
                     ShowId = item.show.id,
-                    Name = item.show.name
+                    Name = item.show.name,
+                    ImageUrl = GetImage(item.show.image)
                 };
+
+                ImageHelper.GetShowImageUrl(show);
+
                 shows.Add(show);
             }
             return shows;
@@ -35,7 +41,7 @@ namespace Jarloo.Sojurn.InformationProviders
         {
             try
             {
-                var requestShowDetailUri = string.Format("{0}shows/{1}", BASE_URL, HttpUtility.HtmlEncode(showId));
+                var requestShowDetailUri = $"{BASE_URL}shows/{HttpUtility.HtmlEncode(showId)}";
                 var shdata = GetJsonData(requestShowDetailUri);
 
                 var show = new Show
@@ -51,8 +57,7 @@ namespace Jarloo.Sojurn.InformationProviders
                     AirTimeMinute = GetTime(shdata.schedule.time, 'M')
                 };
 
-                var requestShowEpisodsUri = string.Format("{0}shows/{1}/episodes", BASE_URL,
-                    HttpUtility.HtmlEncode(showId));
+                var requestShowEpisodsUri = $"{BASE_URL}shows/{HttpUtility.HtmlEncode(showId)}/episodes";
                 var epdata = GetJsonData(requestShowEpisodsUri);
 
                 //I could not use linq becuase the json data is dynamic
@@ -70,7 +75,7 @@ namespace Jarloo.Sojurn.InformationProviders
                     }
                     //the season can't be null because the ep.season starts from 1 in TvMaze API
                     //and the 'if' statment above initialize the vavriable
-                    season.Episodes.Add(new Episode
+                    season?.Episodes.Add(new Episode
                     {
                         EpisodeNumber = ep.number,
                         AirDate = GetDate(ep.airdate),
@@ -78,8 +83,10 @@ namespace Jarloo.Sojurn.InformationProviders
                         Link = ep.url,
                         ImageUrl = GetImage(ep.image),
                         ShowName = shdata.name,
-                        SeasonNumber = ep.season
+                        SeasonNumber = ep.season,
+                        Summary = RemoveHtmlTags(ep.summary.ToString())
                     });
+                    
                     //if needed (check by status) get the value for the last Episode AirDate as the show's end date 
                     if (show.Status == "Ended")
                         lastEpisodeAirDate = GetDate(ep.airdate);
@@ -144,7 +151,7 @@ namespace Jarloo.Sojurn.InformationProviders
             //failesafe
             return DEFAULT_COUNTRY_CODE;
         }
-        
+
         private static int GetTime(dynamic time, char type)
         {
             if ((time == null) || (time == "")) return 12;
@@ -164,10 +171,25 @@ namespace Jarloo.Sojurn.InformationProviders
 
         private static DateTime? GetDate(dynamic e)
         {
-            if (e == null)
+            try
+            {
+                if (e == null)
+                    return null;
+
+                if (string.IsNullOrWhiteSpace(e.Value)) return null;
+                
+                DateTime t = e;
+                return t;
+            }
+            catch
+            {
                 return null;
-            DateTime t = e;
-            return t;
+            }
+        }
+
+        private static string RemoveHtmlTags(string input)
+        {
+            return string.IsNullOrWhiteSpace(input) ? input : Regex.Replace(input, @"<[^>]*>", string.Empty);
         }
     }
 }

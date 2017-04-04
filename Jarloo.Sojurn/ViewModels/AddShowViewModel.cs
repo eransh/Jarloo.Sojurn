@@ -1,29 +1,34 @@
 ﻿using System.Collections.Generic;
-using System.ComponentModel.Composition;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using Caliburn.Micro;
+using Jarloo.Sojurn.Helpers;
 using Jarloo.Sojurn.InformationProviders;
 using Jarloo.Sojurn.Models;
 
 namespace Jarloo.Sojurn.ViewModels
 {
-    [Export]
-    public class AddShowViewModel : Screen
+    
+    public sealed class AddShowViewModel : ViewModel
     {
         #region Properties
 
+        public IInformationProvider InformationProvider;
         private bool isSearchCompleted;
         private string showName;
 
-        public BindableCollection<Show> Shows { get; set; }
+        public ObservableCollection<Show> Shows { get; set; } = new ObservableCollection<Show>();
 
-        private bool isWorking;
+        public ICommand AddShowCommand { get; set; }
+        public ICommand CancelCommand { get; set; }
+        public ICommand SearchCommand { get; set; }
+        
         private Show selectedShow;
-        private Show show;
+        private Show newShow;
         private string error;
-        private List<Show> currentShows;
+        public  List<Show> CurrentShows;
+        private bool isShowNameFocused = true;
 
         public string Error
         {
@@ -35,18 +40,24 @@ namespace Jarloo.Sojurn.ViewModels
             }
         }
 
-        public bool CanAddShow
+        public bool IsShowNameFocused
         {
-            get { return SelectedShow != null && isWorking == false; }
-        }
-
-        public Show Show
-        {
-            get { return show; }
+            get { return isShowNameFocused; }
             set
             {
-                show = value;
-                NotifyOfPropertyChange(() => Show);
+                NotifyOfPropertyChange(() => IsShowNameFocused);
+            }
+        }
+
+        public bool CanAddShow => SelectedShow != null && IsWorking == false;
+
+        public Show NewShow
+        {
+            get { return newShow; }
+            set
+            {
+                newShow = value;
+                NotifyOfPropertyChange(() => NewShow);
             }
         }
 
@@ -57,18 +68,6 @@ namespace Jarloo.Sojurn.ViewModels
             {
                 selectedShow = value;
                 NotifyOfPropertyChange(() => SelectedShow);
-                NotifyOfPropertyChange(() => CanAddShow);
-            }
-        }
-
-
-        public bool IsWorking
-        {
-            get { return isWorking; }
-            set
-            {
-                isWorking = value;
-                NotifyOfPropertyChange(() => IsWorking);
                 NotifyOfPropertyChange(() => CanAddShow);
             }
         }
@@ -95,21 +94,22 @@ namespace Jarloo.Sojurn.ViewModels
         }
 
         #endregion
-
-        private readonly IInformationProvider informationProvider;
-
-        [ImportingConstructor]
-        public AddShowViewModel(IInformationProvider infoProvider, List<Show> currentShows)
+        
+    
+        public AddShowViewModel()
         {
-            Shows = new BindableCollection<Show>();
-            informationProvider = infoProvider;
-            DisplayName = "";
-            this.currentShows = currentShows;
+            BindCommands();
         }
-
-        public void Cancel()
+        
+        private void BindCommands()
         {
-            TryClose(false);
+            AddShowCommand = new RelayCommand(t=> AddShow());
+            CancelCommand = new RelayCommand(t =>
+            {
+                View.DialogResult = false;
+                Close();
+            });
+            SearchCommand = new RelayCommand(t=> SearchShow());
         }
 
         public async void SearchShow()
@@ -118,64 +118,11 @@ namespace Jarloo.Sojurn.ViewModels
             IsWorking = true;
 
             var query = ShowName;
-            var shows = await Task<List<Show>>.Factory.StartNew(() =>
+            var shows = await Task.Run(() =>
             {
                 try
                 {
-                    return informationProvider.GetShows(query);
-                }
-                catch
-                {
-                    return null;
-                }
-            });
-
-            IsWorking = false;
-
-            Execute.BeginOnUIThread(() =>
-            {
-                Shows.Clear();
-                IsSearchCompleted = true;
-
-                if (shows == null)
-                {
-                    Error = "Provider failed to return information.";
-                    return;
-                }
-
-                Error = null;
-
-                foreach (var show in shows)
-                {
-                    Shows.Add(show);
-                }
-            });
-        }
-
-        public async void AddShow()
-        {
-            if (SelectedShow == null) return;
-
-            if (currentShows.Any(w => w.ShowId == SelectedShow.ShowId))
-            {
-                Error = "Show is already in your collection.";
-                ShowName = string.Empty;
-                IsSearchCompleted = false;
-                SelectedShow = null;
-                return;
-            }
-
-            Execute.BeginOnUIThread(() =>
-            {
-                IsWorking = true;
-                IsSearchCompleted = false;
-            });
-
-            var newShow = await Task<Show>.Factory.StartNew(() =>
-            {
-                try
-                {
-                    return informationProvider.GetFullDetails(SelectedShow.ShowId);
+                    return InformationProvider.GetShows(query);
                 }
                 catch
                 {
@@ -183,12 +130,60 @@ namespace Jarloo.Sojurn.ViewModels
                 }
             });
             
-            Show = newShow;
+            Shows.Clear();
+            IsSearchCompleted = true;
+
+            if (shows == null)
+            {
+                Error = "Provider failed to return information.";
+                return;
+            }
+
+            Error = null;
+
+            foreach (var s in shows)
+            {
+                Shows.Add(s);
+            }
+
+            IsWorking = false;
+        }
+
+        public async void AddShow()
+        {
+            if (SelectedShow == null) return;
+
+            if (CurrentShows.Any(w => w.ShowId == SelectedShow.ShowId))
+            {
+                Error = "NewShow is already in your collection.";
+                ShowName = string.Empty;
+                IsSearchCompleted = false;
+                SelectedShow = null;
+                return;
+            }
+            
+            IsWorking = true;
+            IsSearchCompleted = false;
+            
+            var newShow = await Task.Run(() =>
+            {
+                try
+                {
+                    return InformationProvider.GetFullDetails(SelectedShow.ShowId);
+                }
+                catch
+                {
+                    return null;
+                }
+            });
+
+            NewShow = newShow;
 
             if (newShow != null)
             {
                 Error = null;
-                TryClose(true);
+                View.DialogResult = true;
+                Close();
             }
             else
             {
