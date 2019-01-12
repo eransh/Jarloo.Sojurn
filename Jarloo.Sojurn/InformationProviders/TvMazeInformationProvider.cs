@@ -60,7 +60,7 @@ namespace Jarloo.Sojurn.InformationProviders
                 var requestShowEpisodsUri = $"{BASE_URL}shows/{HttpUtility.HtmlEncode(showId)}/episodes";
                 var epdata = GetJsonData(requestShowEpisodsUri);
 
-                //I could not use linq becuase the json data is dynamic
+                //I could not use linq because the json data is dynamic
                 //use old reliable foreach
                 DateTime? lastEpisodeAirDate = null;
                 var seasonNumber = 0;
@@ -74,7 +74,7 @@ namespace Jarloo.Sojurn.InformationProviders
                         seasonNumber = ep.season;
                     }
                     //the season can't be null because the ep.season starts from 1 in TvMaze API
-                    //and the 'if' statment above initialize the vavriable
+                    //and the 'if' statement above initialize the variable
                     season?.Episodes.Add(new Episode
                     {
                         EpisodeNumber = ep.number,
