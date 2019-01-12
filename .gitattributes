@@ -24,5 +24,4 @@
 #custom for clickonce deployment
 *.manifest binary 
 *.application binary 
-*.deploy binary 
-
+*.deploy binary

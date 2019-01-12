@@ -1,15 +1,17 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Jarloo.Sojurn.Extensions;
 using Jarloo.Sojurn.Helpers;
 using Jarloo.Sojurn.InformationProviders;
 using Jarloo.Sojurn.Models;
 
 namespace Jarloo.Sojurn.ViewModels
 {
-    
+
     public sealed class AddShowViewModel : ViewModel
     {
         #region Properties
@@ -23,16 +25,16 @@ namespace Jarloo.Sojurn.ViewModels
         public ICommand AddShowCommand { get; set; }
         public ICommand CancelCommand { get; set; }
         public ICommand SearchCommand { get; set; }
-        
+
         private Show selectedShow;
         private Show newShow;
         private string error;
-        public  List<Show> CurrentShows;
+        public List<Show> CurrentShows;
         private bool isShowNameFocused = true;
 
         public string Error
         {
-            get { return error; }
+            get => error;
             set
             {
                 error = value;
@@ -42,7 +44,7 @@ namespace Jarloo.Sojurn.ViewModels
 
         public bool IsShowNameFocused
         {
-            get { return isShowNameFocused; }
+            get => isShowNameFocused;
             set
             {
                 NotifyOfPropertyChange(() => IsShowNameFocused);
@@ -53,7 +55,7 @@ namespace Jarloo.Sojurn.ViewModels
 
         public Show NewShow
         {
-            get { return newShow; }
+            get => newShow;
             set
             {
                 newShow = value;
@@ -63,7 +65,7 @@ namespace Jarloo.Sojurn.ViewModels
 
         public Show SelectedShow
         {
-            get { return selectedShow; }
+            get => selectedShow;
             set
             {
                 selectedShow = value;
@@ -74,7 +76,7 @@ namespace Jarloo.Sojurn.ViewModels
 
         public bool IsSearchCompleted
         {
-            get { return isSearchCompleted; }
+            get => isSearchCompleted;
             set
             {
                 isSearchCompleted = value;
@@ -85,7 +87,7 @@ namespace Jarloo.Sojurn.ViewModels
 
         public string ShowName
         {
-            get { return showName; }
+            get => showName;
             set
             {
                 showName = value;
@@ -95,58 +97,68 @@ namespace Jarloo.Sojurn.ViewModels
 
         #endregion
         
-    
         public AddShowViewModel()
         {
             BindCommands();
         }
-        
+
         private void BindCommands()
         {
-            AddShowCommand = new RelayCommand(t=> AddShow());
-            CancelCommand = new RelayCommand(t =>
+            try
             {
-                View.DialogResult = false;
-                Close();
-            });
-            SearchCommand = new RelayCommand(t=> SearchShow());
+                AddShowCommand = new RelayCommand(t => AddShow());
+                CancelCommand = new RelayCommand(t =>
+                {
+                    View.DialogResult = false;
+                    Close();
+                });
+                SearchCommand = new RelayCommand(t => SearchShow());
+            }
+            catch (Exception ex)
+            {
+                ErrorManager.Log(ex);
+            }
         }
 
         public async void SearchShow()
         {
-            IsSearchCompleted = false;
-            IsWorking = true;
-
-            var query = ShowName;
-            var shows = await Task.Run(() =>
+            try
             {
-                try
+                IsSearchCompleted = false;
+                IsWorking = true;
+
+                var query = ShowName;
+                var shows = await Task.Run(() =>
                 {
-                    return InformationProvider.GetShows(query);
-                }
-                catch
+                    try
+                    {
+                        return InformationProvider.GetShows(query);
+                    }
+                    catch
+                    {
+                        return null;
+                    }
+                });
+
+                Shows.Clear();
+                IsSearchCompleted = true;
+
+                if (shows == null)
                 {
-                    return null;
+                    Error = "Provider failed to return information.";
+                    return;
                 }
-            });
-            
-            Shows.Clear();
-            IsSearchCompleted = true;
 
-            if (shows == null)
-            {
-                Error = "Provider failed to return information.";
-                return;
+                Error = null;
+
+                Shows.AddRange(shows);
+                
+                IsWorking = false;
             }
-
-            Error = null;
-
-            foreach (var s in shows)
+            catch (Exception ex)
             {
-                Shows.Add(s);
+                ErrorManager.Log(ex);
             }
-
-            IsWorking = false;
         }
 
         public async void AddShow()
@@ -161,11 +173,11 @@ namespace Jarloo.Sojurn.ViewModels
                 SelectedShow = null;
                 return;
             }
-            
+
             IsWorking = true;
             IsSearchCompleted = false;
-            
-            var newShow = await Task.Run(() =>
+
+            var ns = await Task.Run(() =>
             {
                 try
                 {
@@ -177,9 +189,9 @@ namespace Jarloo.Sojurn.ViewModels
                 }
             });
 
-            NewShow = newShow;
+            NewShow = ns;
 
-            if (newShow != null)
+            if (ns != null)
             {
                 Error = null;
                 View.DialogResult = true;
